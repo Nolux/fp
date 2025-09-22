@@ -1,0 +1,301 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String          @id
+  name          String
+  email         String
+  emailVerified Boolean         @default(false)
+  image         String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @default(now()) @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+  families      Family[]
+  Task          Task[]
+  Event         Event[]
+  preferences   UserPreference?
+  notifications Notification[]
+  reminders     Reminder[]
+  comments      TaskComment[]
+
+  stripeCustomerId String?
+  subscription     Subscription?
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  @@map("verification")
+}
+
+model Subscription {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  active    Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Family {
+  id            String         @id @default(cuid())
+  name          String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  user          User           @relation(fields: [userId], references: [id])
+  userId        String
+  members       FamilyMember[]
+  tasks         Task[]
+  events        Event[]
+  calendars     Calendar[]
+  locations     Location[]
+  notifications Notification[]
+
+  @@map("family")
+}
+
+model FamilyMember {
+  id       String @id @default(cuid())
+  familyId String
+  name     String
+  Family   Family @relation(fields: [familyId], references: [id])
+
+  @@map("family_member")
+}
+
+model Event {
+  id            String         @id @default(cuid())
+  title         String
+  address       String?
+  description   String?
+  startTime     DateTime
+  endTime       DateTime
+  completed     Boolean        @default(false)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  user          User           @relation(fields: [userId], references: [id])
+  userId        String
+  family        Family         @relation(fields: [familyId], references: [id])
+  familyId      String
+  calendar      Calendar       @relation(fields: [calendarId], references: [id])
+  calendarId    String
+  location      Location?      @relation(fields: [locationId], references: [id])
+  locationId    String?
+  reminders     Reminder[]
+  notifications Notification[]
+
+  @@map("event")
+}
+
+model Task {
+  id            String          @id @default(cuid())
+  title         String
+  description   String?
+  deadline      DateTime?
+  completed     Boolean         @default(false)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  user          User            @relation(fields: [userId], references: [id])
+  userId        String
+  family        Family          @relation(fields: [familyId], references: [id])
+  familyId      String
+  checklist     ChecklistItem[]
+  comments      TaskComment[]
+  reminders     Reminder[]
+  notifications Notification[]
+
+  @@map("task")
+}
+
+/// Calendar for grouping family events (e.g., school, chores)
+
+model Calendar {
+  id        String   @id @default(cuid())
+  name      String
+  color     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  family    Family   @relation(fields: [familyId], references: [id])
+  familyId  String
+  events    Event[]
+
+  @@unique([familyId, name])
+  @@map("calendar")
+}
+
+/// Saved place to reuse across events
+
+model Location {
+  id        String   @id @default(cuid())
+  label     String
+  address   String?
+  latitude  Float?
+  longitude Float?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  family    Family   @relation(fields: [familyId], references: [id])
+  familyId  String
+  events    Event[]
+
+  @@map("location")
+}
+
+/// Subtasks / checklist items under a task
+
+model ChecklistItem {
+  id        String   @id @default(cuid())
+  title     String
+  completed Boolean  @default(false)
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  task      Task     @relation(fields: [taskId], references: [id])
+  taskId    String
+
+  @@index([taskId, position])
+  @@map("checklist_item")
+}
+
+/// Comments on a task
+
+model TaskComment {
+  id        String   @id @default(cuid())
+  content   String
+  createdAt DateTime @default(now())
+  task      Task     @relation(fields: [taskId], references: [id])
+  taskId    String
+  author    User     @relation(fields: [authorId], references: [id])
+  authorId  String
+
+  @@index([taskId])
+  @@map("task_comment")
+}
+
+enum ReminderChannel {
+  PUSH
+  EMAIL
+  SMS
+}
+
+/// Scheduled reminders for tasks or events
+
+model Reminder {
+  id        String          @id @default(cuid())
+  remindAt  DateTime
+  channel   ReminderChannel @default(PUSH)
+  createdAt DateTime        @default(now())
+  sentAt    DateTime?
+  user      User            @relation(fields: [userId], references: [id])
+  userId    String
+  task      Task?           @relation(fields: [taskId], references: [id])
+  taskId    String?
+  event     Event?          @relation(fields: [eventId], references: [id])
+  eventId   String?
+
+  @@index([userId, remindAt])
+  @@index([taskId])
+  @@index([eventId])
+  @@map("reminder")
+}
+
+enum NotificationType {
+  TASK_ASSIGNED
+  TASK_COMMENTED
+  TASK_COMPLETED
+  EVENT_INVITE
+  EVENT_UPDATED
+  REMINDER_SENT
+}
+
+/// In-app notifications
+
+model Notification {
+  id        String           @id @default(cuid())
+  type      NotificationType
+  data      Json?
+  createdAt DateTime         @default(now())
+  readAt    DateTime?
+  user      User             @relation(fields: [userId], references: [id])
+  userId    String
+  family    Family?          @relation(fields: [familyId], references: [id])
+  familyId  String?
+  task      Task?            @relation(fields: [taskId], references: [id])
+  taskId    String?
+  event     Event?           @relation(fields: [eventId], references: [id])
+  eventId   String?
+
+  @@index([userId, createdAt])
+  @@index([familyId])
+  @@index([taskId])
+  @@index([eventId])
+  @@map("notification")
+}
+
+/// Per-user preferences
+
+model UserPreference {
+  id          String   @id @default(cuid())
+  timezone    String   @default("UTC")
+  locale      String   @default("en")
+  notifyEmail Boolean  @default(true)
+  notifyPush  Boolean  @default(true)
+  notifySms   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String   @unique
+
+  @@map("user_preference")
+}
