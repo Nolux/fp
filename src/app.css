@@ -1,2 +1,6 @@
 @import 'tailwindcss';
-@plugin "daisyui";
+@plugin "daisyui"
+{ themes: cmyk --default };
+
+@source inline("{row,col}-span-{1..10}");
+@source inline("{inline-shadow,shadow,border}-{black,primary,secondary,warning,error,success}");
