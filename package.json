@@ -11,6 +11,7 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "db:dev": "npx prisma dev",
+    "db:seed": "npx tsx prisma/seed.ts",
     "db:studio": "npx prisma studio",
     "db:push": "npx prisma db push",
     "db:generate": "npx prisma generate"
